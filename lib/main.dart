@@ -209,11 +209,21 @@ class _HomePageState extends State<HomePage> {
   /// immediately keeps Dismissible happy (it must leave the tree right away).
   final Set<dynamic> _removedKeys = <dynamic>{};
 
+  String _selectedCategory = 'All';
+
+  bool get _hasFilters => _selectedCategory != 'All';
+
+  // ───────────── Actions ─────────────
+
   void _showMessage(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );
+  }
+
+  void _resetFilters() {
+    setState(() => _selectedCategory = 'All');
   }
 
   /// Opens the form. [key] + [existing] = edit mode, otherwise add mode.
@@ -278,6 +288,29 @@ class _HomePageState extends State<HomePage> {
     return confirmed ?? false;
   }
 
+  // ───────────── Filtering / grouping ─────────────
+
+  List<String> _categoryList(List<MapEntry<dynamic, Task>> entries) {
+    final list = <String>[...taskCategories];
+    for (final e in entries) {
+      if (!list.contains(e.value.category)) list.add(e.value.category);
+    }
+    return list;
+  }
+
+  bool _matches(Task task, String selectedCategory) {
+    return selectedCategory == 'All' || task.category == selectedCategory;
+  }
+
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good Morning';
+    if (hour < 18) return 'Good Afternoon';
+    return 'Good Evening';
+  }
+
+  // ───────────── Small shared widgets ─────────────
+
   Widget _chip({
     required String label,
     required Color color,
@@ -330,6 +363,322 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _sectionTitle(
+    String title, {
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 12),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: primaryText,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const Spacer(),
+          if (actionLabel != null)
+            GestureDetector(
+              onTap: onAction,
+              child: Text(
+                actionLabel,
+                style: const TextStyle(
+                  color: orangeColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ───────────── Header / search / tabs ─────────────
+
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Container(
+          width: 50,
+          height: 50,
+          padding: const EdgeInsets.all(2.5),
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(colors: [cyanColor, pinkColor]),
+          ),
+          child: Container(
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              color: surfaceColor,
+            ),
+            child: const Icon(Icons.checklist_rounded, color: cyanColor),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _greeting(),
+                style: const TextStyle(color: secondaryText, fontSize: 13),
+              ),
+              const SizedBox(height: 2),
+              const Text(
+                "My To-Do's",
+                style: TextStyle(
+                  color: primaryText,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Tooltip(
+          message: 'Clear filters',
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: _hasFilters ? _resetFilters : null,
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: surfaceColor,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _hasFilters ? cyanColor : borderColor,
+                ),
+              ),
+              child: Icon(
+                Icons.filter_alt_off_outlined,
+                color: _hasFilters ? cyanColor : secondaryText,
+                size: 22,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryTabs(
+    List<MapEntry<dynamic, Task>> entries,
+    List<String> categories,
+    String selected,
+  ) {
+    final tabs = <String>['All', ...categories];
+
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: tabs.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final name = tabs[index];
+          final count = name == 'All'
+              ? entries.length
+              : entries.where((e) => e.value.category == name).length;
+          final isSelected = name == selected;
+          final color = name == 'All' ? cyanColor : categoryColor(name);
+
+          return GestureDetector(
+            onTap: () => setState(() => _selectedCategory = name),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? color.withValues(alpha: 0.15)
+                    : surfaceColor,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isSelected ? color : borderColor,
+                  width: isSelected ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    name == 'All' ? Icons.grid_view_rounded : categoryIcon(name),
+                    size: 18,
+                    color: isSelected ? color : secondaryText,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    name,
+                    style: TextStyle(
+                      color: isSelected ? color : secondaryText,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      color: isSelected ? color : secondaryText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ───────────── Hero / category overview / schedule ─────────────
+
+  Widget _heroStat(String value, String label, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: const TextStyle(color: secondaryText, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeroCard(List<MapEntry<dynamic, Task>> entries) {
+    final now = DateTime.now();
+    final total = entries.length;
+    final overdue = entries
+        .where((e) => daysBetween(now, e.value.deadlineDate) < 0)
+        .length;
+    final dueToday = entries
+        .where((e) => daysBetween(now, e.value.deadlineDate) == 0)
+        .length;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF183C43), Color(0xFF24212F)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Manage Your Daily\nTasks & Goals.',
+            style: TextStyle(
+              color: primaryText,
+              fontSize: 24,
+              height: 1.2,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Track and complete your routine tasks efficiently.',
+            style: TextStyle(color: secondaryText, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _heroStat('$total', 'Total', cyanColor),
+              const SizedBox(width: 10),
+              _heroStat('$dueToday', 'Due today', orangeColor),
+              const SizedBox(width: 10),
+              _heroStat('$overdue', 'Overdue', pinkColor),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ───────────── Task list ─────────────
+
+  Widget _buildGroupHeader(String category, int count) {
+    final accent = categoryColor(category);
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 12, top: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(categoryIcon(category), color: accent, size: 17),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            category,
+            style: const TextStyle(
+              color: primaryText,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const Spacer(),
+          _chip(label: '$count', color: accent),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildGroupedTasks(
+    List<MapEntry<dynamic, Task>> filtered,
+    List<String> categories,
+  ) {
+    final widgets = <Widget>[];
+
+    for (final category in categories) {
+      final items =
+          filtered.where((e) => e.value.category == category).toList()
+            ..sort(
+              (a, b) => a.value.deadlineDate.compareTo(b.value.deadlineDate),
+            );
+      if (items.isEmpty) continue;
+
+      widgets.add(_buildGroupHeader(category, items.length));
+      for (final entry in items) {
+        widgets.add(buildTaskCard(entry.key, entry.value));
+      }
+    }
+
+    return widgets;
+  }
+
   Widget buildTaskCard(dynamic key, Task task) {
     final Color accent = categoryColor(task.category);
     final status = deadlineStatus(task.deadlineDate);
@@ -372,10 +721,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ],
         ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () => _openTaskForm(key: key, existing: task),
-          child: Padding(
+        child: Padding(
             padding: const EdgeInsets.all(17),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,29 +756,38 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          _chip(label: task.category, color: accent),
-                          _chip(
-                            label: status.label,
-                            color: status.color,
-                            icon: Icons.schedule,
-                          ),
-                        ],
+                      _chip(
+                        label: status.label,
+                        color: status.color,
+                        icon: Icons.schedule,
                       ),
                       if (task.description.trim().isNotEmpty) ...[
                         const SizedBox(height: 10),
-                        Text(
-                          task.description,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: secondaryText,
-                            fontSize: 13,
-                            height: 1.35,
-                          ),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Padding(
+                              padding: EdgeInsets.only(top: 2),
+                              child: Icon(
+                                Icons.notes_outlined,
+                                size: 14,
+                                color: blueColor,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                task.description,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: secondaryText,
+                                  fontSize: 13,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                       const SizedBox(height: 4),
@@ -471,147 +826,55 @@ class _HomePageState extends State<HomePage> {
               ],
             ),
           ),
-        ),
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 90,
-              height: 90,
-              decoration: BoxDecoration(
-                color: cyanColor.withValues(alpha: 0.10),
-                shape: BoxShape.circle,
-                border: Border.all(color: cyanColor.withValues(alpha: 0.3)),
-              ),
-              child: const Icon(
-                Icons.checklist_rounded,
-                color: cyanColor,
-                size: 45,
-              ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'No tasks yet',
-              style: TextStyle(
-                color: primaryText,
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Add your first task to get started.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: secondaryText, fontSize: 14),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard(List<MapEntry<dynamic, Task>> entries) {
-    final int total = entries.length;
-    final int overdue = entries
-        .where((e) => daysBetween(DateTime.now(), e.value.deadlineDate) < 0)
-        .length;
-
-    final String subtitle = overdue > 0
-        ? '$total task${total == 1 ? '' : 's'} saved locally • $overdue overdue'
-        : '$total task${total == 1 ? '' : 's'} saved locally';
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF183C43), Color(0xFF24212F)],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
+  Widget _buildMessageState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+      child: Column(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 90,
+            height: 90,
             decoration: BoxDecoration(
-              color: cyanColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(14),
+              color: cyanColor.withValues(alpha: 0.10),
+              shape: BoxShape.circle,
+              border: Border.all(color: cyanColor.withValues(alpha: 0.3)),
             ),
-            child: const Icon(Icons.today_outlined, color: cyanColor),
+            child: Icon(icon, color: cyanColor, size: 45),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Your Tasks',
-                  style: TextStyle(
-                    color: primaryText,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: secondaryText, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 24),
           Text(
-            '$total',
+            title,
             style: const TextStyle(
-              color: cyanColor,
-              fontSize: 28,
+              color: primaryText,
+              fontSize: 22,
               fontWeight: FontWeight.bold,
             ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: secondaryText, fontSize: 14),
           ),
         ],
       ),
     );
   }
+
+  // ───────────── Build ─────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        title: const Text(
-          "To-Do's",
-          style: TextStyle(
-            color: primaryText,
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
-          ),
-        ),
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: surfaceColor,
-              shape: BoxShape.circle,
-              border: Border.all(color: borderColor),
-            ),
-            child: const Icon(Icons.checklist_rounded, color: cyanColor),
-          ),
-        ],
-      ),
       body: SafeArea(
         child: ValueListenableBuilder<Box<Task>>(
           valueListenable: taskBox.listenable(),
@@ -625,47 +888,62 @@ class _HomePageState extends State<HomePage> {
               if (task != null) entries.add(MapEntry(key, task));
             }
 
-            if (entries.isEmpty) return _buildEmptyState();
+            final categories = _categoryList(entries);
+            final selected = (_selectedCategory == 'All' ||
+                    categories.contains(_selectedCategory))
+                ? _selectedCategory
+                : 'All';
+
+            final filtered =
+                entries.where((e) => _matches(e.value, selected)).toList();
 
             return ListView(
-              padding: const EdgeInsets.fromLTRB(18, 8, 18, 100),
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 110),
               children: [
-                _buildSummaryCard(entries),
-                const Padding(
-                  padding: EdgeInsets.only(left: 4, bottom: 12),
-                  child: Text(
-                    'All Tasks',
-                    style: TextStyle(
-                      color: primaryText,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                _buildHeader(),
+                const SizedBox(height: 18),
+                _buildCategoryTabs(entries, categories, selected),
+                const SizedBox(height: 18),
+                _buildHeroCard(entries),
+                const SizedBox(height: 24),
+                if (entries.isEmpty)
+                  _buildMessageState(
+                    icon: Icons.checklist_rounded,
+                    title: 'No tasks yet',
+                    subtitle: 'Tap the + button to add your first task.',
+                  )
+                else if (filtered.isEmpty)
+                  _buildMessageState(
+                    icon: Icons.folder_open_outlined,
+                    title: 'No tasks here',
+                    subtitle: 'There are no tasks in this category yet.',
+                  )
+                else ...[
+                  _sectionTitle(
+                    selected == 'All' ? 'All Tasks' : '$selected Tasks',
+                  ),
+                  ..._buildGroupedTasks(filtered, categories),
+                  const SizedBox(height: 10),
+                  const Center(
+                    child: Text(
+                      'Swipe a task left to delete • Tap the pencil to edit',
+                      style: TextStyle(color: secondaryText, fontSize: 12),
                     ),
                   ),
-                ),
-                for (final entry in entries)
-                  buildTaskCard(entry.key, entry.value),
-                const SizedBox(height: 10),
-                const Center(
-                  child: Text(
-                    'Swipe a task left to delete • Tap a task to edit',
-                    style: TextStyle(color: secondaryText, fontSize: 12),
-                  ),
-                ),
+                ],
               ],
             );
           },
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () => _openTaskForm(),
-        backgroundColor: cyanColor,
+        tooltip: 'Add task',
+        backgroundColor: orangeColor,
         foregroundColor: backgroundColor,
         elevation: 8,
-        icon: const Icon(Icons.add),
-        label: const Text(
-          'Add Task',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        shape: const CircleBorder(),
+        child: const Icon(Icons.add, size: 30),
       ),
     );
   }
